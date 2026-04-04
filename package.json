@@ -1,0 +1,29 @@
+{
+  "name": "pi-cli-anything",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pi extension for generating CLI harnesses for GUI applications",
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:py": "python3 -m pytest tests/test_skill_generator.py tests/test_repl_skin.py tests/test_skill_template.py -v",
+    "test:all": "npm run test:py && npm run test"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0",
+    "typescript": "^5.7.0"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
