@@ -18,8 +18,11 @@ Usage:
     skin.print_goodbye()
 """
 
+import logging
 import os
 import sys
+
+logger = logging.getLogger(__name__)
 
 # ── ANSI color codes (no external deps for core styling) ──────────────
 
@@ -119,8 +122,11 @@ class ReplSkin:
         if skill_path is None:
             from pathlib import Path
             _auto = Path(__file__).resolve().parent.parent / "skills" / "SKILL.md"
-            if _auto.is_file():
-                skill_path = str(_auto)
+            try:
+                if _auto.is_file():
+                    skill_path = str(_auto)
+            except OSError as exc:
+                logger.debug("Could not check for SKILL.md at %s: %s", _auto, exc)
         self.skill_path = skill_path
         self.accent = _ACCENT_COLORS.get(self.software, _DEFAULT_ACCENT)
 
@@ -128,7 +134,12 @@ class ReplSkin:
         if history_file is None:
             from pathlib import Path
             hist_dir = Path.home() / f".cli-anything-{self.software}"
-            hist_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                hist_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                logger.warning(
+                    "Could not create history directory %s: %s", hist_dir, exc
+                )
             self.history_file = str(hist_dir / "history")
         else:
             self.history_file = history_file
@@ -459,6 +470,12 @@ class ReplSkin:
             )
             return session
         except ImportError:
+            return None
+        except OSError as exc:
+            logger.warning(
+                "Could not open history file %s, starting without history: %s",
+                self.history_file, exc,
+            )
             return None
 
     def get_input(self, pt_session, project_name: str = "",
