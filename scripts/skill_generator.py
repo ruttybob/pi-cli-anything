@@ -11,10 +11,13 @@ The generated SKILL.md files contain:
 - Examples for AI agents
 """
 
+import logging
 import re
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 
 def _format_display_name(name: str) -> str:
@@ -77,8 +80,14 @@ def extract_cli_metadata(harness_path: str) -> SkillMetadata:
             f"cli_anything directory not found in {harness_path}. "
             "Ensure the harness structure includes cli_anything/<software>/"
         )
-    software_dirs = [d for d in cli_anything_dir.iterdir()
-                     if d.is_dir() and (d / "__init__.py").exists()]
+    try:
+        software_dirs = [d for d in cli_anything_dir.iterdir()
+                         if d.is_dir() and (d / "__init__.py").exists()]
+    except OSError as exc:
+        logger.error("Failed to list directory %s: %s", cli_anything_dir, exc)
+        raise ValueError(
+            f"Cannot read cli_anything directory {cli_anything_dir}: {exc}"
+        ) from exc
 
     if not software_dirs:
         raise ValueError(f"No CLI package found in {harness_path}")
@@ -92,23 +101,34 @@ def extract_cli_metadata(harness_path: str) -> SkillMetadata:
     system_package = None
 
     if readme_path.exists():
-        readme_content = readme_path.read_text(encoding="utf-8")
-        skill_intro = extract_intro_from_readme(readme_content)
-        system_package = extract_system_package(readme_content)
+        try:
+            readme_content = readme_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            logger.warning("Could not read README at %s: %s", readme_path, exc)
+            readme_content = ""
+        if readme_content:
+            skill_intro = extract_intro_from_readme(readme_content)
+            system_package = extract_system_package(readme_content)
 
     # Extract version from setup.py
     setup_path = harness_path / "setup.py"
     version = "1.0.0"
 
     if setup_path.exists():
-        version = extract_version_from_setup(setup_path)
+        try:
+            version = extract_version_from_setup(setup_path)
+        except OSError as exc:
+            logger.warning("Could not read setup.py at %s, using default version: %s", setup_path, exc)
 
     # Extract commands from CLI file
     cli_file = software_dir / f"{software_name}_cli.py"
     command_groups = []
 
     if cli_file.exists():
-        command_groups = extract_commands_from_cli(cli_file)
+        try:
+            command_groups = extract_commands_from_cli(cli_file)
+        except OSError as exc:
+            logger.warning("Could not read CLI file at %s: %s", cli_file, exc)
 
     # Generate examples based on software type
     examples = generate_examples(software_name, command_groups)
@@ -175,16 +195,25 @@ def extract_system_package(content: str) -> Optional[str]:
 
 
 def extract_version_from_setup(setup_path: Path) -> str:
-    """Extract version from setup.py."""
+    """Extract version from setup.py.
+
+    Raises:
+        OSError: If the file cannot be read.
+    """
     content = setup_path.read_text(encoding="utf-8")
     match = re.search(r'version\s*=\s*["\']([^"\']+)["\']', content)
     if match:
         return match.group(1)
+    logger.info("No version string found in %s, using default", setup_path)
     return "1.0.0"
 
 
 def extract_commands_from_cli(cli_path: Path) -> list[CommandGroup]:
-    """Extract command groups and commands from CLI file."""
+    """Extract command groups and commands from CLI file.
+
+    Raises:
+        OSError: If the file cannot be read.
+    """
     content = cli_path.read_text(encoding="utf-8")
     groups = []
 
@@ -486,11 +515,20 @@ def generate_skill_file(harness_path: str, output_path: Optional[str] = None,
         output_path = Path(output_path)
 
     # Ensure output directory exists
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.error("Failed to create output directory %s: %s", output_path.parent, exc)
+        raise
 
     # Write file
-    output_path.write_text(content, encoding="utf-8")
+    try:
+        output_path.write_text(content, encoding="utf-8")
+    except OSError as exc:
+        logger.error("Failed to write SKILL.md to %s: %s", output_path, exc)
+        raise
 
+    logger.info("Generated SKILL.md at %s", output_path)
     return str(output_path)
 
 
