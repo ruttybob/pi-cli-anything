@@ -17,7 +17,7 @@
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Resolve extension directory for asset loading
@@ -29,7 +29,14 @@ const __dirname = dirname(__filename);
  * All assets must be present alongside index.ts (via install.sh or manual copy).
  */
 function readAsset(...paths: string[]): string {
-	const fullPath = join(__dirname, ...paths);
+	const fullPath = resolve(__dirname, ...paths);
+	// Defense-in-depth: ensure resolved path stays within extension directory
+	// to prevent path traversal if callers ever pass untrusted input.
+	if (!fullPath.startsWith(__dirname)) {
+		throw new Error(
+			`CLI-Anything extension: path traversal blocked — "${join(...paths)}" resolves outside extension directory`
+		);
+	}
 	try {
 		return readFileSync(fullPath, "utf-8");
 	} catch (err) {
